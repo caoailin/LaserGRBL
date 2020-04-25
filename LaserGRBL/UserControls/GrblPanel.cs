@@ -23,7 +23,15 @@ namespace LaserGRBL.UserControls
 		private float mCurF;
 		private float mCurS;
 		private bool mFSTrig;
-
+		private float mZoom = 1;
+		private int mBitmapWidth
+		{
+			get { return (int)( Width * mZoom); }
+		}
+		private int mBitmapHeight
+		{
+			get { return (int)(Height * mZoom); }
+		}
 		public GrblPanel()
 		{
 			InitializeComponent();
@@ -37,7 +45,30 @@ namespace LaserGRBL.UserControls
 
 			forcez = Settings.GetObject("Enale Z Jog Control", false);
 			SettingsForm.SettingsChanged += SettingsForm_SettingsChanged;
+			DoubleClick += GrblPanel_DoubleClick;
+			MouseWheel += GrblPanel_MouseWheel;
 		}
+
+		private void GrblPanel_MouseWheel(object sender, MouseEventArgs e)
+		{
+			if (e.Delta > 0)
+				mZoom += 0.1f;
+			else
+				mZoom -= 0.1f;
+			if (mZoom > 10) mZoom = 10f;
+			if (mZoom < 0.1) mZoom = 0.1f;
+			RecreateBMP();
+		}
+
+		private void GrblPanel_DoubleClick(object sender, EventArgs e)
+		{
+			PointF mousePos = PointToClient(MousePosition);
+			PointF wpos = TranslateWorldPoint(mousePos);
+			if(Core != null)
+				Core.EnqueueCommand(new GrblCommand($"G0 X{wpos.X} Y{wpos.Y}"));
+		}
+
+		
 
 		private void SettingsForm_SettingsChanged(object sender, EventArgs e)
 		{
@@ -60,9 +91,8 @@ namespace LaserGRBL.UserControls
 			try
 			{
 
-
 				if (mBitmap != null)
-					e.Graphics.DrawImage(mBitmap, 0, 0, Width, Height);
+					e.Graphics.DrawImage(mBitmap, 0, Height - mBitmapHeight, mBitmapWidth, mBitmapHeight);
 
 				if (Core != null)
 				{
@@ -172,7 +202,7 @@ namespace LaserGRBL.UserControls
 		{
 			try
 			{
-				Size wSize = Size;
+				Size wSize = new Size(mBitmapWidth, mBitmapHeight);
 
 				if (wSize.Width < 1 || wSize.Height < 1)
 					return;
@@ -187,7 +217,7 @@ namespace LaserGRBL.UserControls
 
 					if (Core != null /*&& Core.HasProgram*/)
 						Core.LoadedFile.DrawOnGraphics(g, wSize);
-
+					
 					mLastMatrix = g.Transform;
 				}
 
@@ -211,6 +241,21 @@ namespace LaserGRBL.UserControls
 			PointF[] pa = new PointF[] { p };
 			mLastMatrix.TransformPoints(pa);
 			p = pa[0];
+			p.Y += (Height - mBitmapHeight);
+			return p;
+		}
+
+		public PointF TranslateWorldPoint(PointF p)
+		{
+			using (Graphics g = Graphics.FromImage(mBitmap))
+			{
+				p.Y -= (Height - mBitmapHeight);
+				g.Transform = mLastMatrix;
+				PointF[] pa = new PointF[] { p };
+				g.TransformPoints(CoordinateSpace.World, CoordinateSpace.Device, pa);
+				p = pa[0];
+				
+			}
 			return p;
 		}
 
@@ -243,5 +288,6 @@ namespace LaserGRBL.UserControls
 		{
 			RecreateBMP();
 		}
+		
 	}
 }
